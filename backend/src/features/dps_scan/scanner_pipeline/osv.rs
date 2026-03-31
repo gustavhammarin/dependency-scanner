@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::features::dps_scan::errors::ScanError;
 
-// ─── OSV API types ────────────────────────────────────────────────────────────
-
 #[derive(Serialize)]
 struct OsvBatchRequest {
     queries: Vec<OsvQuery>,
@@ -38,7 +36,6 @@ struct OsvVulnRef {
     id: String,
 }
 
-// ─── Queries ──────────────────────────────────────────────────────────────────
 
 /// Returns a Vec aligned 1:1 with `purls`. Each entry is Some(ids) or None.
 pub async fn query_osv_batch(purls: &[String]) -> Result<Vec<Option<Vec<String>>>, ScanError> {

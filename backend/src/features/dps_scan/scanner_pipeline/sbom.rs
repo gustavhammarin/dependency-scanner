@@ -5,8 +5,6 @@ use serde::Deserialize;
 
 use crate::features::dps_scan::{errors::ScanError, models::DependencyType};
 
-// ─── CycloneDX SBOM types ────────────────────────────────────────────────────
-
 #[derive(Deserialize)]
 pub struct CycloneDxBom {
     pub metadata: Option<CdxMetadata>,
@@ -45,14 +43,12 @@ const EXCLUDE_PREFIXES: &[&str] = &[
     "pkg:pypi/setuptools@",
 ];
 
-// ─── Parsing & classification ─────────────────────────────────────────────────
 
 pub fn parse_sbom(path: &Path) -> Result<CycloneDxBom, ScanError> {
     let json = std::fs::read_to_string(path)?;
     Ok(serde_json::from_str(&json)?)
 }
 
-/// Returns (purls, dep_type_map) — all library PURLs and which are direct.
 pub fn classify_dependencies(bom: &CycloneDxBom) -> (Vec<String>, HashMap<String, DependencyType>) {
     let root_ref = bom
         .metadata
@@ -93,16 +89,10 @@ pub fn classify_dependencies(bom: &CycloneDxBom) -> (Vec<String>, HashMap<String
     (purls, dep_types)
 }
 
-/// Checks whether a dep-ref from `dependsOn` refers to the same package as `purl`.
-///
-/// cdxgen uses inconsistent bom-ref formats across ecosystems — sometimes a full
-/// purl, sometimes just `Name@version`, sometimes just `Name`. A case-insensitive
-/// substring check on the purl's `name@version` tail is robust enough in practice.
 fn purl_matches(purl: &str, dep_ref: &str) -> bool {
     if purl.eq_ignore_ascii_case(dep_ref) {
         return true;
     }
-    // Strip "pkg:ecosystem/" prefix → "packagename@version"
     let purl_tail = purl
         .split_once('/')
         .map(|(_, t)| t)
