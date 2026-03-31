@@ -1,0 +1,32 @@
+services:
+
+  backend:
+    build:
+      context: ./backend
+  
+      dockerfile: DockerFile
+    ports:
+      - "8081:5000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:///app/data/data.db
+    volumes:
+      - sqlite_data:/app/data
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      dockerfile: DockerFile
+      args:
+        VITE_API_URL: http://localhost:8081/api
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+  
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
