@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
+
 use serde::Deserialize;
 
 use crate::features::dps_scan::{errors::ScanError, models::DependencyType};
@@ -53,22 +54,16 @@ pub fn parse_sbom(path: &Path) -> Result<CycloneDxBom, ScanError> {
 
 /// Returns (purls, dep_type_map) — all library PURLs and which are direct.
 pub fn classify_dependencies(bom: &CycloneDxBom) -> (Vec<String>, HashMap<String, DependencyType>) {
-    // Find the root bom-ref from metadata
     let root_ref = bom
         .metadata
         .as_ref()
         .and_then(|m| m.component.as_ref())
         .and_then(|c| c.bom_ref.as_deref());
 
-    let mut dep_types: HashMap<String, DependencyType> = HashMap::new();
-
-    if let Some(root) = root_ref {
-        if let Some(root_dep) = bom.dependencies.iter().find(|d| d.r#ref == root) {
-            for direct_purl in &root_dep.depends_on {
-                dep_types.insert(direct_purl.clone(), DependencyType::Direct);
-            }
-        }
-    }
+    let direct_refs: Vec<String> = root_ref
+        .and_then(|root| bom.dependencies.iter().find(|d| d.r#ref == root))
+        .map(|dep| dep.depends_on.clone())
+        .unwrap_or_default();
 
     let purls: Vec<String> = bom
         .components
@@ -80,17 +75,42 @@ pub fn classify_dependencies(bom: &CycloneDxBom) -> (Vec<String>, HashMap<String
                 .unwrap_or(true)
         })
         .filter_map(|c| c.purl.clone())
-        .filter(|p| {
-            !EXCLUDE_PREFIXES.iter().any(|prefix| p.starts_with(prefix))
-        }) // skip GitHub Actions
+        .filter(|p| !EXCLUDE_PREFIXES.iter().any(|prefix| p.starts_with(prefix)))
         .collect();
 
-    // Anything not in direct set is transitive
-    for purl in &purls {
-        dep_types
-            .entry(purl.clone())
-            .or_insert(DependencyType::Transitive);
-    }
+    let dep_types: HashMap<String, DependencyType> = purls
+        .iter()
+        .map(|purl| {
+            let kind = if direct_refs.iter().any(|r| purl_matches(purl, r)) {
+                DependencyType::Direct
+            } else {
+                DependencyType::Transitive
+            };
+            (purl.clone(), kind)
+        })
+        .collect();
 
     (purls, dep_types)
+}
+
+/// Checks whether a dep-ref from `dependsOn` refers to the same package as `purl`.
+///
+/// cdxgen uses inconsistent bom-ref formats across ecosystems — sometimes a full
+/// purl, sometimes just `Name@version`, sometimes just `Name`. A case-insensitive
+/// substring check on the purl's `name@version` tail is robust enough in practice.
+fn purl_matches(purl: &str, dep_ref: &str) -> bool {
+    if purl.eq_ignore_ascii_case(dep_ref) {
+        return true;
+    }
+    // Strip "pkg:ecosystem/" prefix → "packagename@version"
+    let purl_tail = purl
+        .split_once('/')
+        .map(|(_, t)| t)
+        .unwrap_or(purl)
+        .to_lowercase();
+    let dep_lower = dep_ref.to_lowercase();
+
+    purl_tail == dep_lower
+        || purl_tail.contains(&dep_lower)
+        || dep_lower.contains(&purl_tail)
 }

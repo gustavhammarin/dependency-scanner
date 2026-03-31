@@ -75,6 +75,18 @@ pub async fn get_or_fetch_source(
     }
 }
 
+pub async fn delete_source(
+    pool: &Pool<Sqlite>,
+    cache: &DiskCache,
+    id: i64,
+) -> Result<(), PackageFetcherError> {
+    if let Some(p) = repository::get_package_by_id(pool, &id).await? {
+        cache.delete_dir(PathBuf::from(&p.cache_path).as_path()).await?;
+    }
+    repository::delete_package(pool, &id).await?;
+    Ok(())
+}
+
 async fn evict_by_size(pool: &Pool<Sqlite>, cache: &DiskCache) -> Result<(), PackageFetcherError> {
     tracing::info!("checking db against max_bytes");
     let mut total_bytes = repository::get_total_bytes(pool).await?;

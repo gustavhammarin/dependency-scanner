@@ -61,6 +61,13 @@ pub async fn get_total_bytes(pool: &Pool<Sqlite>) -> Result<i64, PackageFetcherE
     Ok(bytes)
 }
 
+pub async fn get_package_by_id(pool: &Pool<Sqlite>, id: &i64) -> Result<Option<Package>, PackageFetcherError> {
+    let package = sqlx::query_as!(Package, "SELECT * FROM packages WHERE id = ?", id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(package)
+}
+
 pub async fn delete_package(pool: &Pool<Sqlite>, id: &i64) -> Result<(), PackageFetcherError> {
     sqlx::query!("DELETE FROM packages WHERE id = ?", id)
         .execute(pool)

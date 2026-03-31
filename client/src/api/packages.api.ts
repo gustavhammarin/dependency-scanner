@@ -20,3 +20,7 @@ export const fetchPackage = (req: FetchPackageRequest) => {
         body: JSON.stringify(req),
     });
 };
+
+export const deletePackage = (id: number) => {
+    return apiFetch(`/packages/${id}`, { method: "DELETE" });
+};

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePackages, PACKAGES_KEY } from "@/hooks/packages/usePackages";
-import { fetchPackage } from "@/api/packages.api";
+import { deletePackage, fetchPackage } from "@/api/packages.api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,18 @@ function PackagesPage() {
   const [version, setVersion] = useState("");
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const handleDelete = async (id: number) => {
+    try {
+      setDeletingId(id);
+      const res = await deletePackage(id);
+      if (!res.ok) throw new Error(await res.text() || res.statusText);
+      queryClient.invalidateQueries({ queryKey: PACKAGES_KEY });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleFetch = async () => {
     if (!packageId || !version) return;
@@ -112,10 +124,19 @@ function PackagesPage() {
                 className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2 text-sm"
               >
                 <span className="font-medium">{p.package_id}</span>
-                <div className="flex gap-4 text-muted-foreground">
+                <div className="flex items-center gap-4 text-muted-foreground">
                   <span>{p.version}</span>
                   <span className="capitalize">{p.package_source}</span>
                   <span>{new Date(p.fetch_date).toLocaleDateString()}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(Number(p.id))}
+                    disabled={deletingId === Number(p.id)}
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-6 px-2"
+                  >
+                    {deletingId === Number(p.id) ? "Deleting…" : "Delete"}
+                  </Button>
                 </div>
               </div>
             ))}
