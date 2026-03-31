@@ -5,7 +5,7 @@ use tokio::process::Command;
 
 use crate::features::zip_source::file_extractors::extract_zip;
 
-use super::{decompiler, error::ZipSourceError};
+use super::error::ZipSourceError;
 
 const FRAMEWORKS: &[&str] = &[
     "net8.0",
@@ -27,15 +27,8 @@ impl NuGetSource {
         Ok(Self { client })
     }
 
-    /// Download, extract, decompile DLLs/AARs/JARs, write synthetic `.csproj` files,
-    /// run `dotnet restore` + `cdxgen` to produce `cdx.json`, and return the root dir.
-    /// The root contains:
-    ///   - `{id}.{ver}.nupkg`       — original package file
-    ///   - `extracted/`             — raw nupkg contents
-    ///   - `decompiled/`            — decompiled source (for crypto analysis)
-    ///   - `project_{tfm}/`         — synthetic .csproj per framework
-    ///   - `cdx.json`               — CycloneDX SBOM (first successful TFM)
-    /// Caller must keep TempDir alive.
+    /// Download, extract, write synthetic `.csproj` files, run `dotnet restore` + `cdxgen`
+    /// to produce `cdx.json`, and return the root dir. Caller must keep TempDir alive.
     pub async fn download_and_extract(
         &self,
         package_id: &str,
@@ -68,18 +61,6 @@ impl NuGetSource {
         tokio::task::spawn_blocking(move || extract_zip(&np, &ed))
             .await
             .map_err(|e| ZipSourceError::TokioTaskError(e.to_string()))??;
-
-        let decompiled_dir = temp.path().join("decompiled");
-        tokio::fs::create_dir_all(&decompiled_dir).await?;
-
-        let dst = decompiled_dir.clone();
-        tokio::task::spawn_blocking(move || {
-            decompiler::process_directory(&extract_dir, &dst, "ilspycmd", "jadx")
-        })
-        .await
-        .unwrap()?;
-
-        tracing::info!("[nuget-source] Decompiled {id} {ver}");
 
         for tfm in FRAMEWORKS {
             let project_dir = temp.path().join(format!("project_{tfm}"));
